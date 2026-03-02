@@ -7,6 +7,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
+    // Install GA debug loggers (intercept dataLayer pushes and GA network calls)
+    installGADebuggers();
+
+    // ── Visitor Counter & Analytics ─────────
+    // Wait for Google Analytics to load before tracking
+    if (document.readyState === 'loading') {
+        document.addEventListener('readystatechange', () => {
+            if (document.readyState === 'interactive') {
+                setTimeout(() => {
+                    initializeVisitorCounter();
+                    trackPageView();
+                    waitForGtagAndSendConfirm();
+                }, 100);
+            }
+        });
+    } else {
+        setTimeout(() => {
+            initializeVisitorCounter();
+            trackPageView();
+            waitForGtagAndSendConfirm();
+        }, 100);
+    }
 
     // ── Preloader ───────────────────────────
     const preloader = document.getElementById('preloader');
@@ -395,3 +417,337 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('%c🚀 Anup Kumar Portfolio', 'color: #6c63ff; font-size: 20px; font-weight: bold;');
     console.log('%cBuilt with ❤️ using pure HTML, CSS & JS', 'color: #00d4ff; font-size: 12px;');
 });
+
+/* ═══════════════════════════════════════════
+   VISITOR COUNTER & ANALYTICS
+   ═══════════════════════════════════════════ */
+
+/**
+* Helper function to send Google Analytics events with retry logic
+* Ensures gtag is available before sending
+*/
+function sendGAEvent(eventName, eventData = {}) {
+    if (typeof gtag !== 'undefined') {
+        try {
+            gtag('event', eventName, eventData);
+            console.log(`%c📊 Event tracked: ${eventName}`, 'color: #00d4ff; font-size: 11px;');
+        } catch (error) {
+            console.error('Error sending GA event:', error);
+        }
+    } else {
+        // Retry after a short delay if gtag isn't available yet
+        setTimeout(() => {
+            if (typeof gtag !== 'undefined') {
+                try {
+                    gtag('event', eventName, eventData);
+                    console.log(`%c📊 Event tracked (retry): ${eventName}`, 'color: #ffaa00; font-size: 11px;');
+                } catch (error) {
+                    console.error('Error sending GA event on retry:', error);
+                }
+            }
+        }, 500);
+    }
+}
+
+/**
+ * Poll for gtag and send a confirmatory event once available
+ */
+function waitForGtagAndSendConfirm(maxRetries = 25, interval = 200) {
+    let attempts = 0;
+    const timer = setInterval(() => {
+        attempts++;
+        if (typeof gtag !== 'undefined') {
+            try {
+                const visitorCount = localStorage.getItem('visitorCount') || 0;
+                sendGAEvent('page_view_confirm', {
+                    source: 'main.js',
+                    visitor_count: visitorCount,
+                    non_interaction: true
+                });
+                console.log('%cGA: confirm event sent (page_view_confirm)', 'color: #00d4ff;');
+            } catch (err) {
+                console.error('GA confirm send error', err);
+            }
+            clearInterval(timer);
+        } else if (attempts >= maxRetries) {
+            console.warn('GA not available after retries; confirm event not sent');
+            clearInterval(timer);
+        }
+    }, interval);
+}
+
+/**
+ * Install debug hooks:
+ * - Intercept dataLayer.push to log GA payloads
+ * - Intercept fetch/XHR to log network requests to google-analytics endpoints
+ */
+function installGADebuggers() {
+    try {
+        // Intercept dataLayer.push
+        if (window.dataLayer && !window.__ga_dataLayer_wrapped) {
+            const origPush = window.dataLayer.push.bind(window.dataLayer);
+            window.dataLayer.push = function() {
+                try {
+                    console.log('%cGA dataLayer.push ->', 'color: #6c63ff; font-weight: bold;', arguments);
+                } catch (e) {}
+                return origPush.apply(null, arguments);
+            };
+            window.__ga_dataLayer_wrapped = true;
+        }
+
+        // Intercept fetch to detect GA collect calls
+        if (window.fetch && !window.__ga_fetch_wrapped) {
+            const origFetch = window.fetch.bind(window);
+            window.fetch = async function(resource, init) {
+                try {
+                    const url = (typeof resource === 'string') ? resource : resource.url;
+                    if (url && url.includes('google-analytics.com')) {
+                        console.log('%cGA network fetch ->', 'color: #00d4ff; font-weight: bold;', url, init || '');
+                    }
+                } catch (e) {}
+                return origFetch(resource, init);
+            };
+            window.__ga_fetch_wrapped = true;
+        }
+
+        // Intercept XHR send/open
+        if (window.XMLHttpRequest && !window.__ga_xhr_wrapped) {
+            const XHR = window.XMLHttpRequest;
+            const origOpen = XHR.prototype.open;
+            const origSend = XHR.prototype.send;
+
+            XHR.prototype.open = function(method, url) {
+                this.__ga_url = url;
+                return origOpen.apply(this, arguments);
+            };
+
+            XHR.prototype.send = function(body) {
+                try {
+                    if (this.__ga_url && this.__ga_url.includes('google-analytics.com')) {
+                        console.log('%cGA network XHR ->', 'color: #00d4ff; font-weight: bold;', this.__ga_url, body || '');
+                    }
+                } catch (e) {}
+                return origSend.apply(this, arguments);
+            };
+
+            window.__ga_xhr_wrapped = true;
+        }
+    } catch (err) {
+        console.error('installGADebuggers error', err);
+    }
+}
+
+/**
+ * Initialize visitor counter
+ * Uses localStorage to track unique visitors
+ */
+function initializeVisitorCounter() {
+    const counterEl = document.getElementById('visitorCount');
+    if (!counterEl) return;
+
+    let visitorCount = localStorage.getItem('visitorCount');
+    
+    if (!visitorCount) {
+        visitorCount = 1;
+    } else {
+        // Check if visited today, if not increment
+        const lastVisit = localStorage.getItem('lastVisitDate');
+        const today = new Date().toDateString();
+        
+        if (lastVisit !== today) {
+            visitorCount = parseInt(visitorCount) + 1;
+        }
+    }
+    
+    localStorage.setItem('visitorCount', visitorCount);
+    localStorage.setItem('lastVisitDate', new Date().toDateString());
+    
+    // Animate counter display
+    animateCounter(counterEl, parseInt(visitorCount));
+    
+    // Track with Google Analytics if available
+    // Track with Google Analytics (with retry)
+    sendGAEvent('page_view', {
+        'page_title': document.title,
+        'page_location': window.location.href,
+        'visitor_count': visitorCount
+    });
+    
+    console.log(`%c👥 Total Visitors: ${visitorCount}`, 'color: #00d4ff; font-size: 12px; font-weight: bold;');
+}
+
+/**
+ * Animate counter number
+ */
+function animateCounter(element, finalValue) {
+    let currentValue = 0;
+    const step = Math.ceil(finalValue / 30);
+    
+    const counter = setInterval(() => {
+        currentValue += step;
+        if (currentValue >= finalValue) {
+            element.textContent = finalValue;
+            clearInterval(counter);
+        } else {
+            element.textContent = currentValue;
+        }
+    }, 30);
+}
+
+/**
+ * Track page view and user interactions
+ */
+function trackPageView() {
+    // Track page view with Google Analytics
+    sendGAEvent('page_view', {
+        'page_title': document.title,
+        'page_location': window.location.href
+    });
+
+    // Track user interactions
+    trackInteractions();
+    trackSectionViews();
+}
+
+/**
+ * Track button clicks and interactions
+ */
+function trackInteractions() {
+    // Track CTA button clicks
+    const ctaButtons = document.querySelectorAll('.btn-primary, .hero-cta .btn');
+    ctaButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const buttonText = btn.textContent.trim();
+            sendGAEvent('engagement', {
+                'event_category': 'interaction',
+                'event_label': buttonText,
+                'value': 1
+            });
+            console.log(`📊 Event tracked: Button clicked - ${buttonText}`);
+        });
+    });
+
+    // Track social link clicks
+    const socialLinks = document.querySelectorAll('.social-icon, .footer-social-icons a');
+    socialLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            const platform = link.getAttribute('aria-label') || link.href;
+            sendGAEvent('social_engagement', {
+                'event_category': 'social',
+                'event_label': platform,
+                'value': 1
+            });
+            console.log(`📊 Event tracked: Social link clicked - ${platform}`);
+        });
+    });
+
+    // Track form submission
+    const contactForm = document.getElementById('contactForm');
+    if (contactForm) {
+        contactForm.addEventListener('submit', () => {
+            if (typeof gtag !== 'undefined') {
+                gtag('event', 'form_submission', {
+                    'event_category': 'engagement',
+                    'event_label': 'contact_form',
+                    'value': 1
+                });
+            }
+            console.log('📊 Event tracked: Contact form submitted');
+        });
+    }
+
+    // Track project card clicks
+    const projectCards = document.querySelectorAll('.project-card, .project-link');
+    projectCards.forEach(card => {
+        card.addEventListener('click', () => {
+            const projectTitle = card.querySelector('h3')?.textContent || 'Unknown Project';
+            sendGAEvent('project_view', {
+                'event_category': 'engagement',
+                'event_label': projectTitle,
+                'value': 1
+            });
+            console.log(`📊 Event tracked: Project viewed - ${projectTitle}`);
+        });
+    });
+
+    // Track service card interactions
+    const serviceCards = document.querySelectorAll('.service-card');
+    serviceCards.forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            const serviceTitle = card.querySelector('h3')?.textContent || 'Unknown Service';
+            sendGAEvent('service_hover', {
+                'event_category': 'engagement',
+                'event_label': serviceTitle,
+                'value': 1
+            });
+        });
+    });
+
+    // Track skill tab clicks
+    const skillTabs = document.querySelectorAll('.skill-tab');
+    skillTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const skillType = tab.getAttribute('data-tab');
+            sendGAEvent('skill_view', {
+                'event_category': 'content_view',
+                'event_label': skillType,
+                'value': 1
+            });
+            console.log(`📊 Event tracked: Skill category viewed - ${skillType}`);
+        });
+    });
+
+    // Track theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', () => {
+            const theme = document.documentElement.getAttribute('data-theme');
+            sendGAEvent('theme_toggle', {
+                'event_category': 'preference',
+                'event_label': theme,
+                'value': 1
+            });
+            console.log(`📊 Event tracked: Theme toggled to ${theme}`);
+        });
+    }
+}
+
+/**
+ * Track section views
+ */
+function trackSectionViews() {
+    const sections = document.querySelectorAll('section[id]');
+    const observerOptions = {
+        threshold: 0.5
+    };
+
+    const sectionObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const sectionId = entry.target.getAttribute('id');
+                if (typeof gtag !== 'undefined') {
+                    gtag('event', 'section_view', {
+                        'event_category': 'content_view',
+                        'event_label': sectionId,
+                        'value': 1
+                    });
+                }
+                console.log(`📊 Event tracked: Section viewed - ${sectionId}`);
+            }
+        });
+    }, observerOptions);
+
+    sections.forEach(section => {
+        sectionObserver.observe(section);
+    });
+}
+
+/**
+ * Utility function to send custom analytics events
+ */
+function trackEvent(eventName, eventData = {}) {
+    if (typeof gtag !== 'undefined') {
+        gtag('event', eventName, eventData);
+    }
+    console.log(`📊 Custom event tracked: ${eventName}`, eventData);
+}

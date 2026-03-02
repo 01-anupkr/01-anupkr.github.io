@@ -1579,6 +1579,45 @@ ul, ol {
     50% { transform: scale(1.15); }
 }
 
+/* ── Visitor Counter ──────────────────────── */
+.visitor-counter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+    animation: fadeInUp 0.6s ease 0.3s backward;
+}
+
+.visitor-counter:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--accent-1);
+    color: var(--accent-1);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(108, 99, 255, 0.2);
+}
+
+.visitor-icon {
+    font-size: 1.1em;
+    animation: float 3s ease-in-out infinite;
+}
+
+.visitor-text {
+    font-weight: 500;
+    font-family: var(--font-mono);
+}
+
+#visitorCount {
+    color: var(--accent-1);
+    font-weight: 700;
+    font-size: 1.1em;
+}
+
 /* ── Back to Top ──────────────────────────── */
 .back-to-top {
     position: fixed;
