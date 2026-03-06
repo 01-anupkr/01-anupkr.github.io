@@ -322,11 +322,35 @@ document.addEventListener('DOMContentLoaded', () => {
         contactForm.addEventListener('submit', (e) => {
             e.preventDefault();
 
-            // Show toast
-            showToast('Message sent successfully! 🎉');
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i data-lucide="loader"></i> Sending...';
+            submitBtn.disabled = true;
 
-            // Reset form
-            contactForm.reset();
+            const formData = new FormData(contactForm);
+
+            fetch(contactForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Message sent successfully! 🎉');
+                    contactForm.reset();
+                } else {
+                    showToast('Something went wrong. Please try again.');
+                }
+            })
+            .catch(() => {
+                showToast('Failed to send message. Please try again.');
+            })
+            .finally(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            });
         });
     }
 
