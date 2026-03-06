@@ -328,11 +328,16 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.disabled = true;
 
             const formData = new FormData(contactForm);
+            const jsonData = {};
+            formData.forEach((value, key) => { jsonData[key] = value; });
 
             fetch(contactForm.action, {
                 method: 'POST',
-                body: formData,
-                headers: { 'Accept': 'application/json' }
+                body: JSON.stringify(jsonData),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
             })
             .then(response => response.json())
             .then(data => {
