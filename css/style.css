@@ -5,6 +5,17 @@
 
 /* ── CSS Variables ────────────────────────── */
 :root {
+    /* Prevent text overflow globally */
+    html, body {
+        width: 100%;
+        overflow-x: hidden;
+    }
+
+    /* Utility class for text wrapping */
+    .text-wrap, .hero-title, .hero-description, .section-title, .about-text p, .counter-card p, .section-desc {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
     /* Dark Theme (default) */
     --bg-primary: #0a0a0f;
     --bg-secondary: #12121a;
