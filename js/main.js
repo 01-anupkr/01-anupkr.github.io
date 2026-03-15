@@ -575,27 +575,22 @@ function initializeVisitorCounter() {
     if (!counterEl) return;
 
     let visitorCount = localStorage.getItem('visitorCount');
-    
+    const START_COUNT = 100;
     if (!visitorCount) {
-        visitorCount = 1;
+        visitorCount = START_COUNT;
     } else {
         // Check if visited today, if not increment
         const lastVisit = localStorage.getItem('lastVisitDate');
         const today = new Date().toDateString();
-        
         if (lastVisit !== today) {
             visitorCount = parseInt(visitorCount) + 1;
         }
     }
-    
     localStorage.setItem('visitorCount', visitorCount);
     localStorage.setItem('lastVisitDate', new Date().toDateString());
-    
     // Animate counter display
     animateCounter(counterEl, parseInt(visitorCount));
-    
     // Track with Google Analytics if available
-    // Track with Google Analytics (with retry)
     sendGAEvent('page_view', {
         'page_title': document.title,
         'page_location': window.location.href,
